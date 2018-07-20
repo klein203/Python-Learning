@@ -175,10 +175,12 @@ class BatchProcessManager(object):
 
         
 if __name__=='__main__':
-    parser = argparse.ArgumentParser(description='Insurance Data Process Helper')
-    parser.add_argument('--src', type=str, default=os.path.join('.', 'source'), dest='src', help='source file path')
-    parser.add_argument('--dst', type=str, default=os.path.join('.', 'target'), dest='dst', help='target file path')
+    parser = argparse.ArgumentParser(description='Insurance Data Process Helper:  Usage: python <command.py> [--src SOURCE_PATH] [--dst DEST_PATH]')
+    parser.add_argument('--src', type=str, default=os.path.join('.', 'src'), dest='src', help='source file path')
+    parser.add_argument('--dst', type=str, default=os.path.join('.', 'dst'), dest='dst', help='target file path')
     args = parser.parse_args()
+    
+#     os.makedirs(args.dst)
     
     manager = BatchProcessManager(args.src, args.dst)
     manager.run()
