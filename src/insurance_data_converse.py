@@ -88,7 +88,6 @@ class QueueWriteProcess(VProcess):
         print('[->|  ] PID [%s]: %s is running...' % (os.getpid(), self.name))
         titleIncluded = 1
         
-        # TODO: load file list
         filelist = os.listdir(self._path)
 #         filelist = [f for f in os.listdir(os.path.join('..', 'data', 'insurance', 'raw')) if f.endswith(".xls") or f.endswith(".xlst")]
         for file in filelist:
