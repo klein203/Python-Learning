@@ -10,8 +10,8 @@ import Levenshtein as lev
 import docx
 
 class Sequence(object):
-    def __init__(self, sequence, **kwargs):
-        self._sequence = sequence
+    def __init__(self, seq, **kwargs):
+        self._seq = seq
         self._trunc_head = 0
         self._trunc_tail = 0
         
@@ -21,24 +21,37 @@ class Sequence(object):
         if 'trunc_tail' in kwargs:
             self._trunc_tail = int(kwargs['trunc_tail'])
         
-        self._trunc_sequence = sequence[self._trunc_head:len(self._sequence)-self._trunc_tail]
-    
-    @property
-    def sequence(self):
-        return self._sequence
+        self._trunc_seq_offset = self._trunc_head
+        self._trunc_seq_size = len(self._sequence) - self._trunc_head - self._trunc_tail
 
     @property
-    def seq_size(self):
-        return len(self._sequence)
+    def seq(self):
+        return self._seq
     
     @property
-    def trunc_sequence(self):
-        return self._trunc_sequence
+    def seq_size(self):
+        return len(self._seq)
+    
+    @property
+    def trunc_seq(self):
+        return self._seq[self._trunc_seq_offset:self._trunc_seq_offset+self._trunc_seq_size]
+
+    @property
+    def trunc_seq_offset(self):
+        return self._trunc_seq_offset
+    
+    @trunc_seq_offset.setter
+    def trunc_seq_offset(self, value):
+        self._trunc_seq_offset = value
     
     @property
     def trunc_seq_size(self):
-        return len(self._sequence) - self._trunc_head - self._trunc_tail
+        return self._trunc_seq_size
     
+    @trunc_seq_size.setter
+    def trunc_seq_size(self, value):
+        self._trunc_seq_size = value
+
 
 class SSA():
     def __init__(self):
@@ -65,16 +78,18 @@ class SSA():
 #         return (sample_sequence.trunc_sequence in ref_sequence.sequence)
         ret_ld_val = sample_sequence.trunc_seq_size
         ret_trunc_seq = ''
+        ret_offset = 0
         
-        ref_seq_size = ref_sequence.seq_size
+        ref_seq_size = len(ref_sequence)
         sample_trunc_seq_size = sample_sequence.trunc_seq_size
         for i in xrange(ref_seq_size - sample_trunc_seq_size):
             ld_val = lev.distance(ref_sequence.sequence[i:i+sample_trunc_seq_size], sample_sequence.trunc_sequence)
             if ld_val < ret_ld_val:
                 ret_ld_val = ld_val
                 ret_trunc_seq = ref_sequence.sequence[i:i+sample_trunc_seq_size]
+                ret_offset = i
         
-        return ret_ld_val, ret_trunc_seq
+        return ret_ld_val, ret_trunc_seq, ret_offset
     
     def _match_block(self, ref_seq, sample_seq):
         return lev.matching_blocks(lev.editops(ref_seq, sample_seq), ref_seq, sample_seq)
@@ -86,7 +101,7 @@ class SSA():
             idx = file.index('-')
             patient_no = file[0:idx]
             sample_sequence = self._load_sample_sequence(os.path.join(FLAGS.src, file))
-            ld_val, trunc_ref_seq = self._check(self._ref_seq, sample_sequence)
+            ld_val, trunc_ref_seq, ref_seq_offset = self._check(self._ref_seq, sample_sequence)
             
             if ld_val == 0:
                 d_record = {
@@ -102,7 +117,7 @@ class SSA():
                     'ld': ld_val,
                     'trunc_sample_seq': sample_sequence.trunc_sequence,
                     'trunc_ref_seq': trunc_ref_seq,
-                    'ext_info': mb
+                    'match_block': mb
                 }
             
                 self._word_logger.log(SSARecord(**d_record))
@@ -119,9 +134,15 @@ class SSARecord(object):
             'reaction': '',
             'patient_no': '' ,
             'ld': 0,
+            'sample_seq': '',
+            'sample_trunc_seq_offset': 0,
+            'sample_trunc__seq_size': 0,
+            'ref_seq': '',
+            'ref_trunc_seq_offset': 0,
+            'ref_trunc__seq_size': 0,
             'trunc_sample_seq': '',
             'trunc_ref_seq': '',
-            'ext_info': None
+            'match_block': None
         }
         
         for kwarg in kwargs:
@@ -182,7 +203,7 @@ class SSARecordWordLogger(Logger):
             
             trunc_sample_seq = obj.items['trunc_sample_seq']
             trunc_ref_seq = obj.items['trunc_ref_seq']
-            mb = obj.items['ext_info']
+            mb = obj.items['match_block']
             ref_cursor = 0
             sample_cursor = 0
 
