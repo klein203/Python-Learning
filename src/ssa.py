@@ -22,7 +22,7 @@ class Sequence(object):
             self._trunc_tail = int(kwargs['trunc_tail'])
         
         self._trunc_seq_offset = self._trunc_head
-        self._trunc_seq_size = len(self._sequence) - self._trunc_head - self._trunc_tail
+        self._trunc_seq_size = len(self._seq) - self._trunc_head - self._trunc_tail
 
     @property
     def seq(self):
@@ -60,7 +60,7 @@ class SSA():
         self._excel_logger = SSARecordExcelLogger()
     
     def _init_ref_sequence(self):
-        self._ref_seq = Sequence(self._load_seq(FLAGS.ref))
+        self._ref_sequence = Sequence(self._load_seq(FLAGS.ref))
     
     def _load_sample_sequence(self, file):
         d_trunc = {'trunc_head': FLAGS.trunc_head, 'trunc_tail': FLAGS.trunc_tail}
@@ -69,27 +69,31 @@ class SSA():
     def _load_seq(self, file):
         seq = ''
         with open(file, 'r') as f:
-            l = f.readline()
-            seq += l
+            for l in f.readlines():
+                seq += l.strip('\n')
         return seq
     
+    def _write_seq(self, file, seq):
+        with open(file, 'w') as f:
+            f.write(seq)
+    
     def _check(self, ref_sequence, sample_sequence):
-#         print('SAMPLE(%d): %s' % (len(sample_sequence.trunc_sequence), sample_sequence.trunc_sequence))
-#         return (sample_sequence.trunc_sequence in ref_sequence.sequence)
         ret_ld_val = sample_sequence.trunc_seq_size
-        ret_trunc_seq = ''
-        ret_offset = 0
         
-        ref_seq_size = len(ref_sequence)
-        sample_trunc_seq_size = sample_sequence.trunc_seq_size
-        for i in xrange(ref_seq_size - sample_trunc_seq_size):
-            ld_val = lev.distance(ref_sequence.sequence[i:i+sample_trunc_seq_size], sample_sequence.trunc_sequence)
+        ref_sequence.trunc_seq_size = sample_sequence.trunc_seq_size
+        ref_sequence.trunc_seq_offset = 0
+        offset = 0
+        
+        for i in xrange(ref_sequence.seq_size - sample_sequence.trunc_seq_size):
+            ref_sequence.trunc_seq_offset = i
+            ld_val = lev.distance(ref_sequence.trunc_seq, sample_sequence.trunc_seq)
             if ld_val < ret_ld_val:
                 ret_ld_val = ld_val
-                ret_trunc_seq = ref_sequence.sequence[i:i+sample_trunc_seq_size]
-                ret_offset = i
+                offset = i
         
-        return ret_ld_val, ret_trunc_seq, ret_offset
+        ref_sequence.trunc_seq_offset = offset
+        
+        return ret_ld_val, ref_sequence, sample_sequence
     
     def _match_block(self, ref_seq, sample_seq):
         return lev.matching_blocks(lev.editops(ref_seq, sample_seq), ref_seq, sample_seq)
@@ -98,10 +102,13 @@ class SSA():
         filelist = os.listdir(FLAGS.src)
         
         for file in filelist:
+            sample_sequence = self._load_sample_sequence(os.path.join(FLAGS.src, file))
+            self._write_seq(os.path.join(FLAGS.tar, file), sample_sequence.seq)
+            
             idx = file.index('-')
             patient_no = file[0:idx]
-            sample_sequence = self._load_sample_sequence(os.path.join(FLAGS.src, file))
-            ld_val, trunc_ref_seq, ref_seq_offset = self._check(self._ref_seq, sample_sequence)
+            
+            ld_val, self._ref_sequence, sample_sequence = self._check(self._ref_sequence, sample_sequence)
             
             if ld_val == 0:
                 d_record = {
@@ -110,16 +117,15 @@ class SSA():
                     'ld': ld_val
                 }
             else:
-                mb = self._match_block(trunc_ref_seq, sample_sequence.trunc_sequence)
+                mb = self._match_block(self._ref_sequence.trunc_seq, sample_sequence.trunc_seq)
                 d_record = {
                     'reaction': FLAGS.reaction,
                     'patient_no': patient_no,
                     'ld': ld_val,
-                    'trunc_sample_seq': sample_sequence.trunc_sequence,
-                    'trunc_ref_seq': trunc_ref_seq,
+                    'ref_sequence': self._ref_sequence,
+                    'sample_sequence': sample_sequence,
                     'match_block': mb
                 }
-            
                 self._word_logger.log(SSARecord(**d_record))
         
             self._excel_logger.log(SSARecord(**d_record))
@@ -134,14 +140,8 @@ class SSARecord(object):
             'reaction': '',
             'patient_no': '' ,
             'ld': 0,
-            'sample_seq': '',
-            'sample_trunc_seq_offset': 0,
-            'sample_trunc__seq_size': 0,
-            'ref_seq': '',
-            'ref_trunc_seq_offset': 0,
-            'ref_trunc__seq_size': 0,
-            'trunc_sample_seq': '',
-            'trunc_ref_seq': '',
+            'sample_sequence': None,
+            'ref_sequence': None,
             'match_block': None
         }
         
@@ -186,11 +186,17 @@ class SSARecordWordLogger(Logger):
         self._normal_style.font.name = 'Courier New'
         self._normal_style.font.color.rgb = docx.shared.RGBColor(0x0, 0x0, 0x0)
 
-        self._highlight_style = self._document.styles.add_style('Customized Highlighted', 2)
-        self._highlight_style.font.size = docx.shared.Pt(11)
-        self._highlight_style.font.bold = True
-        self._highlight_style.font.name = 'Courier New'
-        self._highlight_style.font.color.rgb = docx.shared.RGBColor(0x0, 0x0, 0xff)
+        self._matchblock_style = self._document.styles.add_style('Customized Match Block', 2)
+        self._matchblock_style.font.size = docx.shared.Pt(11)
+        self._matchblock_style.font.bold = True
+        self._matchblock_style.font.name = 'Courier New'
+        self._matchblock_style.font.color.rgb = docx.shared.RGBColor(0x0, 0x0, 0x0)
+        
+        self._highlighted_style = self._document.styles.add_style('Customized Highlighted', 2)
+        self._highlighted_style.font.size = docx.shared.Pt(11)
+        self._highlighted_style.font.bold = True
+        self._highlighted_style.font.name = 'Courier New'
+        self._highlighted_style.font.color.rgb = docx.shared.RGBColor(0x0, 0x0, 0xff)
     
     def _init_reference_paragraph(self):
         self._document.add_paragraph('Report', style='Customized Header')
@@ -201,46 +207,61 @@ class SSARecordWordLogger(Logger):
         if isinstance(obj, SSARecord):
             self._document.add_paragraph().add_run('#[%s]' % (obj.items['patient_no']), style='Customized Normal')
             
-            trunc_sample_seq = obj.items['trunc_sample_seq']
-            trunc_ref_seq = obj.items['trunc_ref_seq']
-            mb = obj.items['match_block']
-            ref_cursor = 0
-            sample_cursor = 0
-
-#             print(trunc_ref_seq)
-#             print('----------------------')
+            sample_sequence = obj.items['sample_sequence']
+            ref_sequence = obj.items['ref_sequence']
             
+            # init two paragraphs: ref, sample
             p_ref = self._document.add_paragraph()
             p_ref.add_run('REF   : ', style='Customized Normal')
             
             p_sample = self._document.add_paragraph()
             p_sample.add_run('SAMPLE: ', style='Customized Normal')
             
+            # log block before match_block
+            offset = ref_sequence.trunc_seq_offset - sample_sequence.trunc_seq_offset
+            if offset > 0:
+                p_ref.add_run(ref_sequence.seq[0:ref_sequence.trunc_seq_offset], style='Customized Normal')
+                
+                blank = ''.join([" " for x in xrange(offset)])
+                p_sample.add_run(blank, style='Customized Normal')
+                p_sample.add_run(sample_sequence.seq[0:sample_sequence.trunc_seq_offset], style='Customized Normal')
+            elif offset < 0:
+                blank = ''.join([" " for x in xrange(-offset)])
+                p_ref.add_run(blank, style='Customized Normal')
+                p_ref.add_run(ref_sequence.seq[0:ref_sequence.trunc_seq_offset], style='Customized Normal')
+                
+                p_sample.add_run(sample_sequence.seq[0:sample_sequence.trunc_seq_offset], style='Customized Normal')
+            
+            # log match block
+            mb = obj.items['match_block']
+            ref_cursor = 0
+            sample_cursor = 0
+            
             for x in mb:
                 # not match
-                ref_not_match = trunc_ref_seq[ref_cursor:x[0]]
+                ref_not_match = ref_sequence.trunc_seq[ref_cursor:x[0]]
                 if ref_not_match != '':
                     p_ref.add_run(ref_not_match, style='Customized Highlighted')
-#                     print('ref_not_match:', ref_not_match, ref_cursor, x[0])
 
-                sample_not_match = trunc_sample_seq[sample_cursor:x[1]]
+                sample_not_match = sample_sequence.trunc_seq[sample_cursor:x[1]]
                 if sample_not_match != '':
                     p_sample.add_run(sample_not_match, style='Customized Highlighted')
-#                     print('sample_not_match:', sample_not_match, sample_cursor, x[1])
 
                 # match
-                ref_match = trunc_ref_seq[x[0]:x[0]+x[2]]
+                ref_match = ref_sequence.trunc_seq[x[0]:x[0]+x[2]]
                 if ref_match != '':
-                    p_ref.add_run(ref_match, style='Customized Normal')
-#                     print('ref_match:', ref_match, x[0], x[0]+x[2])
+                    p_ref.add_run(ref_match, style='Customized Match Block')
 
-                sample_match = trunc_sample_seq[x[1]:x[1]+x[2]]
+                sample_match = sample_sequence.trunc_seq[x[1]:x[1]+x[2]]
                 if sample_match != '':
-                    p_sample.add_run(sample_match, style='Customized Normal')
-#                     print('sample_match:', sample_match, x[1], x[1]+x[2])
+                    p_sample.add_run(sample_match, style='Customized Match Block')
                 
                 ref_cursor = x[0]+x[2]
                 sample_cursor = x[1]+x[2]
+
+            # log rest info
+            p_ref.add_run(ref_sequence.seq[ref_sequence.trunc_seq_offset+ref_sequence.trunc_seq_size:], style='Customized Normal')
+            p_sample.add_run(sample_sequence.seq[sample_sequence.trunc_seq_offset+sample_sequence.trunc_seq_size:], style='Customized Normal')
 
             self._document.add_paragraph().add_run('---------------------------------------------------', style='Customized Normal')
         else:
@@ -281,8 +302,15 @@ class SSARecordExcelLogger(Logger):
             self._sheet.write(self._cursor, 0, label=obj.items['reaction'])
             self._sheet.write(self._cursor, 1, label=obj.items['patient_no'])
             self._sheet.write(self._cursor, 2, label=obj.items['ld'])
-            self._sheet.write(self._cursor, 3, label=obj.items['trunc_sample_seq'])
-            self._sheet.write(self._cursor, 4, label=obj.items['trunc_ref_seq'])
+            
+            sample_sequence = obj.items['sample_sequence']
+            if sample_sequence is not None:
+                self._sheet.write(self._cursor, 3, label=sample_sequence.trunc_seq)
+                
+            ref_sequence = obj.items['ref_sequence']
+            if ref_sequence is not None:
+                self._sheet.write(self._cursor, 4, label=ref_sequence.trunc_seq)
+            
             self._cursor += 1
         else:
             pass
@@ -296,7 +324,7 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description='Sanger Sequencing Analysis Toolkit Helper:')
     parser.add_argument('--ref', dest='ref', type=str, default=os.path.join('.', 'ref', '2.2F.txt'), help='reference file')
     parser.add_argument('--src', dest='src', type=str, default=os.path.join('.', 'src'), help='source file path')
-#     parser.add_argument('--tar', dest='tar', type=str, default=os.path.join('.', 'tar'), help='target file path')
+    parser.add_argument('--tar', dest='tar', type=str, default=os.path.join('.', 'tar'), help='target file path')
     parser.add_argument('--excel_log', dest='excel_log', type=str, default=os.path.join('.', 'log', 'report.xls'), help='log file with XLS format')
     parser.add_argument('--word_log', dest='word_log', type=str, default=os.path.join('.', 'log', 'report.docx'), help='log file with DOCX format')
     parser.add_argument('--trunc_head', dest='trunc_head', type=int, default=30, help='numbers for head truncation')
