@@ -53,7 +53,7 @@ class Sequence(object):
         self._trunc_seq_size = value
 
 
-class SSA():
+class SSA(object):
     def __init__(self):
         self._init_ref_sequence()
         self._word_logger = SSARecordWordLogger()
