@@ -12,3 +12,10 @@ class TutorialItem(scrapy.Item):
     # define the fields for your item here like:
     # name = scrapy.Field()
     pass
+
+
+class CarItem(scrapy.Item):
+    series_name = scrapy.Field()
+    model_name = scrapy.Field()
+    price = scrapy.Field()
+    price_num = scrapy.Field()
