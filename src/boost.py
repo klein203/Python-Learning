@@ -103,14 +103,14 @@ def adaboost():
         
         cur_epoch += 1
 
- 
+
 # 读取本地文件，python3 list(map)
 def loadDataSet(fileName):
     dataMat = []
     fr = open(fileName)
     for line in fr.readlines():
         curLine = line.strip().split('\t')
-        fltLine = list(map(float,curLine))  # python3问题修改
+        fltLine = list(map(float,curLine))
         dataMat.append(fltLine)
     return dataMat
  
@@ -168,6 +168,9 @@ def createTree(dataSet, leafType=regLeaf, errType=regErr, ops=(1,4)):
     retTree['right'] = createTree(rSet, leafType, errType, ops)
     return retTree
 
+
+# def testEntropy():
+    
 
 if __name__=='__main__':
     myDat2 = loadDataSet('ex00.txt')
