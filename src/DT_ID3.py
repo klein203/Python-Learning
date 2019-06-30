@@ -36,7 +36,7 @@ def choose_best_feature(data):
     logging.debug('data:\n%s' % data)
     
 #     sub_data = None
-    c_entropy = 1.  # big enough
+    c_entropy = 1000000000.  # big enough
     best_feature = None
     for feature in columns:
         unique_feature_vals = data[feature].unique()
